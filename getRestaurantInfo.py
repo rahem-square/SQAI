@@ -170,9 +170,16 @@ def setItemStock(itemVariationId,quantity):
 
 def makePaymentLink(itemsToOrder):
     # itemsToOrder input is the list of names of dishes that are being ordered (exact matches, like "Grilled Salmon")
+    # OR inputs a list of tuples with item name followed by amount ordered
     # outputs a payment link as a string (actually links to the Checkout API Sandbox Testing Panel, then click "Preview".)
-    # Example:
-    # makeOrder(['Grilled Salmon','Lobster Tail'])
+
+    # Examples:
+    # makePaymentLink(['Grilled Salmon','Lobster Tail','Lobster Tail'])
+    # makePaymentLink([("Lobster Tail", 2),("Grilled Salmon",1)])
+    # makePaymentLink([("Lobster Tail", 3),("Cheesecake", 0),("Grilled Salmon",1),("Cheesecake", 4)])
+
+    if isinstance(itemsToOrder[0],tuple):
+        itemsToOrder = [word for (word, count) in itemsToOrder for i in range(count)] 
 
     client = clientSetup()
     #First determine price based on what's being ordered
@@ -188,7 +195,6 @@ def makePaymentLink(itemsToOrder):
                             "currency": "USD"
                         }
                         } for item in itemsToOrder]
-    print(orderLineItems)
     #creates an order AND payment link
     result = client.checkout.create_payment_link(
     body = {
