@@ -28,7 +28,7 @@ def timeNow():
 
 def clientSetup():    
     client = Client(
-        access_token=os.environ['SQUARE_ACCESS_TOKEN'],
+        access_token="EAAAEK8AT3RsMSSRPHMCED2XtgDiOG3y0BnWtIgjNSp8mS6Rmt50iomrWAOMIk6Z",#os.environ['SQUARE_ACCESS_TOKEN'],
         environment='sandbox')
     return client
 
