@@ -1,4 +1,3 @@
-import numpy
 from square.client import Client
 import os
 import json
@@ -20,15 +19,16 @@ variationIdDict = {'Caesar Salad': 'PKTMJLSRFHOAT24YII7ZZAX3',
                        'Cheesecake': 'GPEC7YGGTNYX2GLTP76SWMO3',
                        'Table #1': 'ZB2Q6W7M6QISEBHDH7QR7XZR',
                        'Table #2': '75QEVJSRFR6V5GPAZ5EBWRQW',
-                       'Table #3': 'AIGQXD4V4PEOPO3XP7RDCOG6'}
+                       'Table #3': 'AIGQXD4V4PEOPO3XP7RDCOG6'
+                       }
 
 def timeNow():
     n = datetime.datetime.now(datetime.timezone.utc)
     return n.isoformat()
 
-def clientSetup():    
+def clientSetup():
     client = Client(
-        access_token="EAAAEK8AT3RsMSSRPHMCED2XtgDiOG3y0BnWtIgjNSp8mS6Rmt50iomrWAOMIk6Z",#os.environ['SQUARE_ACCESS_TOKEN'],
+        access_token='EAAAEK8AT3RsMSSRPHMCED2XtgDiOG3y0BnWtIgjNSp8mS6Rmt50iomrWAOMIk6Z',
         environment='sandbox')
     return client
 
@@ -49,6 +49,7 @@ def getRestaurantInfo():
         for period in location['business_hours']['periods']:
             hours.append(f"{period['day_of_week']} Hours: {period['start_local_time']} to {period['end_local_time']}")
         data['business_hours'] = ' '.join(x for x in hours)
+        data['restaurant_name'] = "Ryan's Restaurant"
 
     elif result.is_error():
         for error in result.errors:
@@ -57,7 +58,7 @@ def getRestaurantInfo():
             print(error['detail'])
 
     #Menu with item Prices - Catalog API
-    
+
     result = client.catalog.list_catalog(
     types = "ITEM"
     )
@@ -75,15 +76,14 @@ def getRestaurantInfo():
                 #I am going to assume inventory is how you track a tables availability, which is likely not how it works, but Tables API is coming out anyways to replace the existing solution
                 dataItem['name'] = item['item_data']['name']
                 dataItem['description'] = item['item_data']['description_plaintext']
-                #dataItem['version'] = item['version']
-                #dataItem['variation_version'] = item['item_data']['variations'][0]['version']
-                #dataItem['id'] = item['id']
-                #dataItem['variation_id'] = item['item_data']['variations'][0]['id']
-
+                dataItem['version'] = item['version']
+                dataItem['variation_version'] = item['item_data']['variations'][0]['version']
+                dataItem['id'] = item['id']
+                dataItem['variation_id'] = item['item_data']['variations'][0]['id']
                 #Inventory to see if table is available - Inventory API
                 dataItem['table_availability'] = "UNKNOWN"
                 result = client.inventory.retrieve_inventory_count(
-                catalog_object_id = item['item_data']['variations'][0]['id'],
+                catalog_object_id = dataItem['variation_id'],
                 location_ids = locationId
                 )
                 if result.is_success():
@@ -99,20 +99,19 @@ def getRestaurantInfo():
                 itemPriceData = item['item_data']['variations'][0]['item_variation_data']['price_money']
                 dataItem['price'] = f"{itemPriceData['amount']/100} {itemPriceData['currency']}"
                 dataItem['description'] = item['item_data']['description_plaintext']
-                #dataItem['version'] = item['version']
-                #dataItem['variation_version'] = item['item_data']['variations'][0]['version']
-                #dataItem['id'] = item['id']
-                #dataItem['variation_id'] = item['item_data']['variations'][0]['id']
-
+                dataItem['version'] = item['version']
+                dataItem['variation_version'] = item['item_data']['variations'][0]['version']
+                dataItem['id'] = item['id']
+                dataItem['variation_id'] = item['item_data']['variations'][0]['id']
                 #Inventory to see if item is available - Inventory API
                 result = client.inventory.retrieve_inventory_count(
-                catalog_object_id = item['item_data']['variations'][0]['id'],
+                catalog_object_id = dataItem['variation_id'],
                 location_ids = locationId
                 )
                 if result.is_success():
                     dataItem['inventory_count'] = result.body['counts'][0]['quantity']
                 dataMenuItems.append(dataItem)
-    
+
         data['tables'] = dataTableItems
         data['menu'] = dataMenuItems
 
@@ -120,14 +119,11 @@ def getRestaurantInfo():
 
 
     # ~ Smoke and Mirrors ~
-    # we can also just make up info too, this can be presented as extra information that companies can add seperately via frontend component, 
+    # we can also just make up info too, this can be presented as extra information that companies can add seperately via frontend component,
     # maybe they can add their own "custom FAQ" answers
     data['parking_availaibility'] = "Our restaurant has a parking lot."
     data['delivery'] = "Our restaurant can deliver food to your location."
-
-    json_object = json.dumps(data)
-    
-    return json_object
+    return data
 
 # We can use this function behind the scenes as though it's the Restaurant POS KDS, which we can interact with to change table availaibilty and menu item stock
 # refer to the variationIdDict for itemVariationIds (I should fix this if we have time)
@@ -140,9 +136,9 @@ def setItemStock(itemVariationId,quantity):
 
     if itemVariationId in variationIdDict.keys():
         itemVariationId = variationIdDict[itemVariationId]
-    
+
     client = clientSetup()
-    #Note that the catalog object id here is for the item variaton's id, not the menu item's id.
+    #Note that the catalog object id here is for the item variaton's id, not the item itself.
 
     quantity = str(quantity)
 
@@ -183,7 +179,7 @@ def makePaymentLink(itemsToOrder):
 
     client = clientSetup()
     #First determine price based on what's being ordered
-    data = getRestaurantInfo()
+    data = json.dumps(getRestaurantInfo())
     data = json.loads(data)
     menuItemPrices = dict([(item['name'],float(item['price'][:-4])) for item in data['menu']])
     #totalPrice = sum([menuItemPrices[item] for item in itemsToOrder])
@@ -209,4 +205,3 @@ def makePaymentLink(itemsToOrder):
     if result.is_success():
         return result.body['payment_link']['url']
     return "Payment Link Error"
-    
