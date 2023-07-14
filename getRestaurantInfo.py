@@ -20,8 +20,7 @@ variationIdDict = {'Caesar Salad': 'PKTMJLSRFHOAT24YII7ZZAX3',
                        'Cheesecake': 'GPEC7YGGTNYX2GLTP76SWMO3',
                        'Table #1': 'ZB2Q6W7M6QISEBHDH7QR7XZR',
                        'Table #2': '75QEVJSRFR6V5GPAZ5EBWRQW',
-                       'Table #3': 'AIGQXD4V4PEOPO3XP7RDCOG6'
-                       }
+                       'Table #3': 'AIGQXD4V4PEOPO3XP7RDCOG6'}
 
 def timeNow():
     n = datetime.datetime.now(datetime.timezone.utc)
@@ -76,14 +75,15 @@ def getRestaurantInfo():
                 #I am going to assume inventory is how you track a tables availability, which is likely not how it works, but Tables API is coming out anyways to replace the existing solution
                 dataItem['name'] = item['item_data']['name']
                 dataItem['description'] = item['item_data']['description_plaintext']
-                dataItem['version'] = item['version']
-                dataItem['variation_version'] = item['item_data']['variations'][0]['version']
-                dataItem['id'] = item['id']
-                dataItem['variation_id'] = item['item_data']['variations'][0]['id']
+                #dataItem['version'] = item['version']
+                #dataItem['variation_version'] = item['item_data']['variations'][0]['version']
+                #dataItem['id'] = item['id']
+                #dataItem['variation_id'] = item['item_data']['variations'][0]['id']
+
                 #Inventory to see if table is available - Inventory API
                 dataItem['table_availability'] = "UNKNOWN"
                 result = client.inventory.retrieve_inventory_count(
-                catalog_object_id = dataItem['variation_id'],
+                catalog_object_id = item['item_data']['variations'][0]['id'],
                 location_ids = locationId
                 )
                 if result.is_success():
@@ -99,13 +99,14 @@ def getRestaurantInfo():
                 itemPriceData = item['item_data']['variations'][0]['item_variation_data']['price_money']
                 dataItem['price'] = f"{itemPriceData['amount']/100} {itemPriceData['currency']}"
                 dataItem['description'] = item['item_data']['description_plaintext']
-                dataItem['version'] = item['version']
-                dataItem['variation_version'] = item['item_data']['variations'][0]['version']
-                dataItem['id'] = item['id']
-                dataItem['variation_id'] = item['item_data']['variations'][0]['id']
+                #dataItem['version'] = item['version']
+                #dataItem['variation_version'] = item['item_data']['variations'][0]['version']
+                #dataItem['id'] = item['id']
+                #dataItem['variation_id'] = item['item_data']['variations'][0]['id']
+
                 #Inventory to see if item is available - Inventory API
                 result = client.inventory.retrieve_inventory_count(
-                catalog_object_id = dataItem['variation_id'],
+                catalog_object_id = item['item_data']['variations'][0]['id'],
                 location_ids = locationId
                 )
                 if result.is_success():
@@ -124,11 +125,8 @@ def getRestaurantInfo():
     data['parking_availaibility'] = "Our restaurant has a parking lot."
     data['delivery'] = "Our restaurant can deliver food to your location."
 
-
     json_object = json.dumps(data)
     
-    print(json_object)    
-
     return json_object
 
 # We can use this function behind the scenes as though it's the Restaurant POS KDS, which we can interact with to change table availaibilty and menu item stock
@@ -144,7 +142,7 @@ def setItemStock(itemVariationId,quantity):
         itemVariationId = variationIdDict[itemVariationId]
     
     client = clientSetup()
-    #Note that the catalog object id here is for the item variaton's id, not the item itself.
+    #Note that the catalog object id here is for the item variaton's id, not the menu item's id.
 
     quantity = str(quantity)
 
@@ -169,3 +167,40 @@ def setItemStock(itemVariationId,quantity):
         print(result.body)
     elif result.is_error():
         print(result.errors)
+
+def makePaymentLink(itemsToOrder):
+    # itemsToOrder input is the list of names of dishes that are being ordered (exact matches, like "Grilled Salmon")
+    # outputs a payment link as a string (actually links to the Checkout API Sandbox Testing Panel, then click "Preview".)
+    # Example:
+    # makeOrder(['Grilled Salmon','Lobster Tail'])
+
+    client = clientSetup()
+    #First determine price based on what's being ordered
+    data = getRestaurantInfo()
+    data = json.loads(data)
+    menuItemPrices = dict([(item['name'],float(item['price'][:-4])) for item in data['menu']])
+    #totalPrice = sum([menuItemPrices[item] for item in itemsToOrder])
+    orderLineItems = [{
+                        "name": item,
+                        "quantity": "1",
+                        "base_price_money": {
+                            "amount": int(menuItemPrices[item]*100),
+                            "currency": "USD"
+                        }
+                        } for item in itemsToOrder]
+    print(orderLineItems)
+    #creates an order AND payment link
+    result = client.checkout.create_payment_link(
+    body = {
+        "idempotency_key": str(uuid.uuid4()),
+        "order": {
+        "location_id": locationId,
+        "line_items": orderLineItems
+        }
+    }
+    )
+    
+    if result.is_success():
+        return result.body['payment_link']['url']
+    return "Payment Link Error"
+    
